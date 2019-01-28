@@ -1,0 +1,130 @@
+<!DOCTYPE html><html><head><meta name="generator" content="Hexo 3.8.0"><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"><meta name="author" content="John Doe"><meta name="renderer" content="webkit"><meta name="copyright" content="John Doe"><meta name="keywords" content="Hexo"><meta name="description" content="null"><meta name="Cache-Control" content="no-cache"><meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1"><title>js异步处理(一)——理解异步 · 菠萝吹雪的博客</title><link rel="stylesheet" href="/css/style.css?v=2018.7.9"><link rel="stylesheet" href="/css/animation.css?v=2018.7.9"><link rel="icon" href="/img/assets/favicon.ico"><link rel="stylesheet" href="https://cdn.bootcss.com/font-awesome/4.7.0/css/font-awesome.min.css?version=1.5.6"><!-- scripts--><script>(function( w ){
+  "use strict";
+  // rel=preload support test
+  if( !w.loadCSS ){
+    w.loadCSS = function(){};
+  }
+  // define on the loadCSS obj
+  var rp = loadCSS.relpreload = {};
+  // rel=preload feature support test
+  // runs once and returns a function for compat purposes
+  rp.support = (function(){
+    var ret;
+    try {
+      ret = w.document.createElement( "link" ).relList.supports( "preload" );
+    } catch (e) {
+      ret = false;
+    }
+    return function(){
+      return ret;
+    };
+  })();
+
+  // if preload isn't supported, get an asynchronous load by using a non-matching media attribute
+  // then change that media back to its intended value on load
+  rp.bindMediaToggle = function( link ){
+    // remember existing media attr for ultimate state, or default to 'all'
+    var finalMedia = link.media || "all";
+
+    function enableStylesheet(){
+      link.media = finalMedia;
+    }
+
+    // bind load handlers to enable media
+    if( link.addEventListener ){
+      link.addEventListener( "load", enableStylesheet );
+    } else if( link.attachEvent ){
+      link.attachEvent( "onload", enableStylesheet );
+    }
+
+    // Set rel and non-applicable media type to start an async request
+    // note: timeout allows this to happen async to let rendering continue in IE
+    setTimeout(function(){
+      link.rel = "stylesheet";
+      link.media = "only x";
+    });
+    // also enable media after 3 seconds,
+    // which will catch very old browsers (android 2.x, old firefox) that don't support onload on link
+    setTimeout( enableStylesheet, 3000 );
+  };
+
+  // loop through link elements in DOM
+  rp.poly = function(){
+    // double check this to prevent external calls from running
+    if( rp.support() ){
+      return;
+    }
+    var links = w.document.getElementsByTagName( "link" );
+    for( var i = 0; i < links.length; i++ ){
+      var link = links[ i ];
+      // qualify links to those with rel=preload and as=style attrs
+      if( link.rel === "preload" && link.getAttribute( "as" ) === "style" && !link.getAttribute( "data-loadcss" ) ){
+        // prevent rerunning on link
+        link.setAttribute( "data-loadcss", true );
+        // bind listeners to toggle media back
+        rp.bindMediaToggle( link );
+      }
+    }
+  };
+
+  // if unsupported, run the polyfill
+  if( !rp.support() ){
+    // run once at least
+    rp.poly();
+
+    // rerun poly on an interval until onload
+    var run = w.setInterval( rp.poly, 500 );
+    if( w.addEventListener ){
+      w.addEventListener( "load", function(){
+        rp.poly();
+        w.clearInterval( run );
+      } );
+    } else if( w.attachEvent ){
+      w.attachEvent( "onload", function(){
+        rp.poly();
+        w.clearInterval( run );
+      } );
+    }
+  }
+
+
+  // commonjs
+  if( typeof exports !== "undefined" ){
+    exports.loadCSS = loadCSS;
+  }
+  else {
+    w.loadCSS = loadCSS;
+  }
+}( typeof global !== "undefined" ? global : this ) );</script><script src="https://cdn.jsdelivr.net/npm/jquery@3.3.1/dist/jquery.min.js" defer></script><script src="/js/main.js?v=2018.7.9" defer></script><!-- fancybox--><link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/fancybox/3.2.5/jquery.fancybox.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'"><script src="https://cdnjs.cloudflare.com/ajax/libs/fancybox/3.2.5/jquery.fancybox.min.js" defer></script><!-- busuanzi--><script async src="//dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js"></script></head><body><section class="profile-close" id="cxo-profile"><div class="profile-avatar"><i class="fa fa-caret-left"></i><img src="/img/assets/cat.png"></div><!--.profile-saying
+  i.fa.fa-comment
+  .saying--><div class="cxo-profile-inner"><div class="profile-name">菠萝吹雪</div><div class="profile-signature">for me</div><div class="read-progress"></div></div></section><header id="cxo-intro" style="height: 70vh;background-image: url(/img/intro/index-bg.png);"><nav id="cxo-intro-nav"><section><div class="intro-nav-title"><a href="/">菠萝吹雪的博客</a></div><div class="intro-nav-label-box"><a href="/">Home</a></div><i class="fa fa-bars intro-nav-menu"><div class="intro-nav-drop"><a href="/">Home</a></div></i><div class="clear"></div></section></nav><h1 class="post-title">js异步处理(一)——理解异步</h1><div class="post-intros"><div class="post-intro-meta"><span class="post-intro-time"><i class="post-intro-calendar fa fa-calendar"></i><span>2019-01-28</span></span></div></div></header><article class="cxo-up" id="cxo-content-outer"><section id="cxo-content-inner"><article class="article-entry" id="post"><p>我对异步的好奇心起于学习Promise时老是一知半解，最近在看《你所不知道的js（中）》，书中对异步这部分的讲解还是很到位的，所以结合自己的理解整理一下相关知识点。<br>本文将从是什么、为什么、怎么样这三步式来讲这个问题。</p>
+<h3 id="一、什么是异步？"><a href="#一、什么是异步？" class="headerlink" title="一、什么是异步？"></a>一、什么是异步？</h3><p>  我们一般喜欢把异步和同步、并行拿出来比较，我以前的理解总是很模糊，总是生硬地记着“同步就是排队执行，异步就是一起执行”，现在一看，当初简直就是傻，所以我们第一步先把这三个概念搞清楚，我不太喜欢看网上有些博客里很含糊地说“xxxx是同步，xxxx是异步”，还有举什么通俗的例子，其实对不懂的人来说还是懵逼。</p>
+<p>  首先我们要知道这一切的根源都是“<strong>Javascript是单线程</strong>”，也就是一次只能做一件事，那么为什么是单线程呢？因为js渲染在浏览器上，包含了许多与用户的交互，如果是多线程，那么试想一个场景：一个线程在某个DOM上添加内容，而另一个线程删除这个DOM，那么浏览器要如何反应呢？这就乱套了。</p>
+<p>  单线程下所有的任务都是需要排队的，而这些任务分为两种：同步任务和异步任务，同步任务就是在主线程上排队执行的任务，只有前一个任务执行完毕，才能执行后一个任务；异步任务指的是，不进入<code>主线程</code>、而进入<code>任务队列</code>（task queue）的任务，只有<code>任务队列</code>通知<code>主线程</code>，某个异步任务可以执行了，该任务才会进入<code>主线程</code>执行。所以说同步执行其实也是一种只有主线程的异步执行。这里有一个视频关于异步操作是如何被执行的，讲得非常好《<a href="http://www.tudou.com/programs/view/ACDNKZJm6pQ/" target="_blank" rel="noopener">what the hack is event loop</a>》，我给大家画个图再来理解一下。</p>
+<p><img src="http://upload-images.jianshu.io/upload_images/5452485-99f606742b17f745.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240" alt="event-loop.png"><br>这里补充说明下不同的异步操作添加到任务队列的时机不同，如 onclick, setTimeout, ajax 处理的方式都不同，这些异步操作是由浏览器内核的 webcore 来执行的，webcore 包含上面提到的3种 webAPI，分别是 DOM Binding、timer、network模块。<br> onclick 由浏览器内核的 DOM Binding 模块来处理，当事件触发的时候，回调函数会立即添加到任务队列中。<br>setTimeout 会由浏览器内核的 timer 模块来进行延时处理，当时间到达的时候，才会将回调函数添加到任务队列中。<br>ajax 则会由浏览器内核的 network 模块来处理，在网络请求完成返回之后，才将回调添加到任务队列中。<br>最后再来说下并行，并行是关于能够同时发生的事情，是一种多线程的运行机制，而不管同步异步都是单线程的。</p>
+<h3 id="二、为什么要用异步操作"><a href="#二、为什么要用异步操作" class="headerlink" title="二、为什么要用异步操作"></a>二、为什么要用异步操作</h3><p>  这个很好理解，同步下前一个事件执行完了才能执行后一个事件，那么要是遇到Ajax请求这种耗时很长的，那页面在这段时间就没法操作了，卡在那儿，更有甚者，万一这个请求由于某种原因一直没有完成，那页面就block了，很不友好。</p>
+<h3 id="三、如何实现异步"><a href="#三、如何实现异步" class="headerlink" title="三、如何实现异步"></a>三、如何实现异步</h3><p>  我们可以通过<code>回调函数</code>、<code>Promise</code>、<code>生成器</code>、<code>Async/Await</code>等来实现异步。<br>  今天我们先说最基础的回调函数处理方法来实现，列举几个大家熟悉的使用场景，比如：ajax请求、IO操作、定时器。</p>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">ajax(url, <span class="function"><span class="keyword">function</span>(<span class="params"></span>)</span>&#123;</span><br><span class="line">    <span class="comment">//这就是回调函数</span></span><br><span class="line"> &#125;);</span><br><span class="line">setTimeOut(<span class="function"><span class="keyword">function</span>(<span class="params"></span>)</span>&#123;</span><br><span class="line">    <span class="comment">//回调函数</span></span><br><span class="line">&#125;, <span class="number">1000</span>)</span><br></pre></td></tr></table></figure>
+<p>回调本身是比较好用的，但是随着Javascript越来越成熟，对于异步编程领域的发展，回调已经不够用了，体现在以下几点：</p>
+<h4 id="1、大脑处理程序是顺序的，对于复杂的回调函数会不易理解，我们需要一种更同步、更顺序的方式来表达异步。"><a href="#1、大脑处理程序是顺序的，对于复杂的回调函数会不易理解，我们需要一种更同步、更顺序的方式来表达异步。" class="headerlink" title="1、大脑处理程序是顺序的，对于复杂的回调函数会不易理解，我们需要一种更同步、更顺序的方式来表达异步。"></a>1、大脑处理程序是顺序的，对于复杂的回调函数会不易理解，我们需要一种更同步、更顺序的方式来表达异步。</h4><p>举例说明：<br><figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//回调函数实现两数相加</span></span><br><span class="line"><span class="function"><span class="keyword">function</span> <span class="title">add</span>(<span class="params">getX,  getY, cb</span>)</span>&#123;</span><br><span class="line">  <span class="keyword">var</span> x, y;</span><br><span class="line">  getX(<span class="function"><span class="keyword">function</span>(<span class="params">xVal</span>)</span>&#123;</span><br><span class="line">    x=xVal;</span><br><span class="line">    <span class="keyword">if</span>(y!=<span class="literal">undefined</span>)&#123;</span><br><span class="line">      cb(x+y);</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;);</span><br><span class="line">  getY(<span class="function"><span class="keyword">function</span>(<span class="params"></span>)</span>&#123;</span><br><span class="line">    y=yVal;</span><br><span class="line">    <span class="keyword">if</span>(x!=<span class="literal">undefined</span>)&#123;</span><br><span class="line">      cb(x+y);</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;);</span><br><span class="line">&#125;</span><br><span class="line">add(fetchX, fetchY, <span class="function"><span class="keyword">function</span>(<span class="params">sum</span>)</span>&#123;</span><br><span class="line">  <span class="built_in">console</span>.log(sum);</span><br><span class="line">&#125;)</span><br><span class="line"></span><br><span class="line"><span class="comment">//Promise实现两数相加</span></span><br><span class="line"><span class="function"><span class="keyword">function</span> <span class="title">add</span>(<span class="params">xPromise, yPromise</span>)</span>&#123;</span><br><span class="line">  <span class="keyword">return</span> <span class="built_in">Promise</span>.all([xPromise, yPromise])</span><br><span class="line">  .then(<span class="function"><span class="keyword">function</span>(<span class="params">values</span>)</span>&#123;</span><br><span class="line">    <span class="keyword">return</span> value[<span class="number">0</span>] + value[<span class="number">1</span>];</span><br><span class="line">  &#125;);</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">//fetchX()、fetchY()返回相应值的Promise</span></span><br><span class="line">add(fetchX(), fetchY())</span><br><span class="line">  .then(<span class="function"><span class="keyword">function</span>(<span class="params">sum</span>)</span>&#123;</span><br><span class="line">    <span class="built_in">console</span>.log(sum);</span><br><span class="line">  &#125;)</span><br></pre></td></tr></table></figure></p>
+<p>只看结构是不是Promise的写法更顺序话一些。<br>2、回调一般会把控制权交给第三方，从而带来信任问题，比如：</p>
+<ul>
+<li>调用回调过早</li>
+<li>调用回调过晚（或未调用）</li>
+<li>调用回调次数过多或过少</li>
+<li>未能传递所需的环境和参数</li>
+<li>吞掉可能出现的错误和异常</li>
+</ul>
+<p>而Promise的特性就有效地解决了这些问题，它是如何解决的呢？</p>
+<h4 id="调用回调过早"><a href="#调用回调过早" class="headerlink" title="调用回调过早"></a>调用回调过早</h4><p>这种顾虑主要是代码是否会引入类Zalgo效应，也就是一个任务有时会同步完地成，而有时会异步地完成，这将导致竟合状态。<br>Promise被定义为不能受这种顾虑的影响，因为即便是立即完成的Promise（比如 new Promise(function(resolve){ resolve(42); })）也不可能被同步地 监听。也就是说，但你在Promise上调用then(..)的时候，即便这个Promise已经被解析了，你给then(..)提供的回调也将总是被<strong>异步</strong>地调用。</p>
+<h4 id="调用回调过晚"><a href="#调用回调过晚" class="headerlink" title="调用回调过晚"></a>调用回调过晚</h4><p>当一个Promise被调用时，这个Promise 上的then注册的回调函数都会在下一个异步时机点上，按顺序地，被立即调用。这些回调中的任意一个都无法影响或延误对其它回调的调用。<br>举例说明：</p>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">p.then( <span class="function"><span class="keyword">function</span>(<span class="params"></span>)</span>&#123;</span><br><span class="line">    p.then( <span class="function"><span class="keyword">function</span>(<span class="params"></span>)</span>&#123;</span><br><span class="line">        <span class="built_in">console</span>.log( <span class="string">"C"</span> );</span><br><span class="line">    &#125; );</span><br><span class="line">    <span class="built_in">console</span>.log( <span class="string">"A"</span> );</span><br><span class="line">&#125; );</span><br><span class="line">p.then( <span class="function"><span class="keyword">function</span>(<span class="params"></span>)</span>&#123;</span><br><span class="line">    <span class="built_in">console</span>.log( <span class="string">"B"</span> );</span><br><span class="line">&#125; );</span><br><span class="line"><span class="comment">// A B C</span></span><br></pre></td></tr></table></figure>
+<p>为什么“C”没有排到“B”的前面？因为因为“C”所处的.then回调函数是在下一个事件循环tick。</p>
+<h4 id="回调未调用"><a href="#回调未调用" class="headerlink" title="回调未调用"></a>回调未调用</h4><p>这是一个很常见的顾虑。Promise用几种方式解决它。<br>首先，当Promise被解析后，在代码不出错的情况下它一定会告知你解析结果。如果代码有错误，归类于后面的“吞掉错误或异常”中。<br>那如果Promise本身不管怎样永远没有被解析呢？那么Promise会用Promise.race来解决。<br>看代码示例:<br><figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 一个使Promise超时的工具</span></span><br><span class="line"><span class="function"><span class="keyword">function</span> <span class="title">timeoutPromise</span>(<span class="params">delay</span>) </span>&#123;</span><br><span class="line">    <span class="keyword">return</span> <span class="keyword">new</span> <span class="built_in">Promise</span>( <span class="function"><span class="keyword">function</span>(<span class="params">resolve,reject</span>)</span>&#123;</span><br><span class="line">        setTimeout( <span class="function"><span class="keyword">function</span>(<span class="params"></span>)</span>&#123;</span><br><span class="line">            reject( <span class="string">"Timeout!"</span> );</span><br><span class="line">        &#125;, delay );</span><br><span class="line">    &#125; );</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 为`foo()`设置一个超时</span></span><br><span class="line"><span class="built_in">Promise</span>.race( [</span><br><span class="line">    foo(),                    <span class="comment">// 尝试调用`foo()`</span></span><br><span class="line">    timeoutPromise( <span class="number">3000</span> )    <span class="comment">// 给它3秒钟</span></span><br><span class="line">] )</span><br><span class="line">.then(</span><br><span class="line">    <span class="function"><span class="keyword">function</span>(<span class="params"></span>)</span>&#123;</span><br><span class="line">        <span class="comment">// `foo(..)`及时地完成了！</span></span><br><span class="line">    &#125;,</span><br><span class="line">    <span class="function"><span class="keyword">function</span>(<span class="params">err</span>)</span>&#123;</span><br><span class="line">        <span class="comment">// `foo()`不是被拒绝了，就是它没有及时完成</span></span><br><span class="line">        <span class="comment">// 那么可以考察`err`来知道是哪种情况</span></span><br><span class="line">    &#125;</span><br><span class="line">);</span><br></pre></td></tr></table></figure></p>
+<h4 id="调用次数过少或过多"><a href="#调用次数过少或过多" class="headerlink" title="调用次数过少或过多"></a>调用次数过少或过多</h4><p>正常是调用一次，“过少”就是未被调用，参考上文；“过多”的情况也很容易理解。Promise的定义方式使得它只能被决议一次，如果出于某种情况决议了多次，Promise也只会接受第一次决议，并忽略后续调用。</p>
+<h4 id="未能传递所需的参数／环境值"><a href="#未能传递所需的参数／环境值" class="headerlink" title="未能传递所需的参数／环境值"></a>未能传递所需的参数／环境值</h4><p>Promise只会有一个解析结果（完成或拒绝）。如果没有用一个值明确地解析它，它的值就是undefined，就像JS中常见的那样。</p>
+<h4 id="吞掉错误或异常"><a href="#吞掉错误或异常" class="headerlink" title="吞掉错误或异常"></a>吞掉错误或异常</h4><p>Promise中异常会被捕获，并且使这个Promise被拒绝。<br>举个例子：</p>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">var</span> p = <span class="keyword">new</span> <span class="built_in">Promise</span>( <span class="function"><span class="keyword">function</span>(<span class="params">resolve,reject</span>)</span>&#123;</span><br><span class="line">    foo.bar();    <span class="comment">// `foo`没有定义，所以这是一个错误！</span></span><br><span class="line">    resolve( <span class="number">42</span> );    <span class="comment">// 永远不会跑到这里 :(</span></span><br><span class="line">&#125; );</span><br><span class="line"></span><br><span class="line">p.then(</span><br><span class="line">    <span class="function"><span class="keyword">function</span> <span class="title">fulfilled</span>(<span class="params"></span>)</span>&#123;</span><br><span class="line">        <span class="comment">// 永远不会跑到这里 :(</span></span><br><span class="line">    &#125;,</span><br><span class="line">    <span class="function"><span class="keyword">function</span> <span class="title">rejected</span>(<span class="params">err</span>)</span>&#123;</span><br><span class="line">        <span class="comment">// `err`将是一个来自`foo.bar()`那一行的`TypeError`异常对象</span></span><br><span class="line">    &#125;</span><br><span class="line">);</span><br></pre></td></tr></table></figure>
+<p>Promise就先说到这里，关于PromiseAPI及其源码还有生成器、Async/Await 在后续文章中整理报道。</p>
+<p>参考资料：<br><a href="http://www.ruanyifeng.com/blog/2014/10/event-loop.html" target="_blank" rel="noopener">阮一峰event-loop</a><br><a href="http://www.cnblogs.com/wangfupeng1988/p/6513070.html" target="_blank" rel="noopener">王福朋深入理解javascript异步系列一</a><br><a href="https://github.com/getify/You-Dont-Know-JS/tree/1ed-zh-CN/async%20%26%20performance" target="_blank" rel="noopener">你不知道的javascript</a><br><a href="http://www.jianshu.com/p/bbd684bfce7d" target="_blank" rel="noopener">你不懂JS: 异步与性能 第三章: Promise（上）</a></p>
+</article><!-- lincense--><div class="license-wrapper"><p> <span>Author:  </span><a href="http://yoursite.com">John Doe</a></p><p> <span>Link:  </span><a href="http://yoursite.com/2019/01/28/async1/">http://yoursite.com/2019/01/28/async1/</a></p><p> <span>Copyright:  </span><span>All articles in this blog are licensed under <a rel="license" href="https://creativecommons.org/licenses/by-nc-nd/3.0">CC BY-NC-SA 3.0</a> unless stating additionally.</span></p></div><div class="post-paginator"><a class="nextSlogan" href="/2019/01/27/fetchVSAjax/" title="Fetch和Ajax的比较"><span>NextPost ></span><br><span class="nextTitle">Fetch和Ajax的比较</span></a><div class="clear"></div></div><div id="comment"></div></section></article><footer id="cxo-footer-outer"><div id="cxo-footer-inner"><p class="footer-container"><span>Site by </span><a href="http://hexo.io"><span>Hexo</span></a><span> | theme </span><a href="https://github.com/Longlongyu/hexo-theme-Cxo"><span>Cxo</span></a></p><i class="fa fa-user"> </i><span id="busuanzi_value_site_uv"></span><span> | </span><i class="fa fa-eye"> </i><span id="busuanzi_value_site_pv"></span></div></footer><!-- catelog--><div class="toc-wrapper" style="top: 70vh;"><div class="toc-catalog"><i class="fa fa-list"> </i><span>CATALOG</span></div><ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#一、什么是异步？"><span class="toc-number">1.</span> <span class="toc-text">一、什么是异步？</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#二、为什么要用异步操作"><span class="toc-number">2.</span> <span class="toc-text">二、为什么要用异步操作</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#三、如何实现异步"><span class="toc-number">3.</span> <span class="toc-text">三、如何实现异步</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#1、大脑处理程序是顺序的，对于复杂的回调函数会不易理解，我们需要一种更同步、更顺序的方式来表达异步。"><span class="toc-number">3.1.</span> <span class="toc-text">1、大脑处理程序是顺序的，对于复杂的回调函数会不易理解，我们需要一种更同步、更顺序的方式来表达异步。</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#调用回调过早"><span class="toc-number">3.2.</span> <span class="toc-text">调用回调过早</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#调用回调过晚"><span class="toc-number">3.3.</span> <span class="toc-text">调用回调过晚</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#回调未调用"><span class="toc-number">3.4.</span> <span class="toc-text">回调未调用</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#调用次数过少或过多"><span class="toc-number">3.5.</span> <span class="toc-text">调用次数过少或过多</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#未能传递所需的参数／环境值"><span class="toc-number">3.6.</span> <span class="toc-text">未能传递所需的参数／环境值</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#吞掉错误或异常"><span class="toc-number">3.7.</span> <span class="toc-text">吞掉错误或异常</span></a></li></ol></li></ol></div><!-- top--><i class="fa fa-arrow-up close" id="go-up" aria-hidden="true"></i></body></html>
